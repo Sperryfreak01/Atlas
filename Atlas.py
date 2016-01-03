@@ -13,7 +13,9 @@ parser = argparse.ArgumentParser(description='Process Google Location data and g
 parser.add_argument("filename", help="path to location data files (JSON format)",
                     type=argparse.FileType('rb'), nargs='+')
 parser.add_argument("-t", "--heatmap", help="generate a heatmap from the datafiles",
-                    action="store_true")
+                    action="store_true", )
+parser.add_argument("-a", "--accuracy", help="generate a heatmap from the datafiles",
+                    type=int, default=25)
 parser.add_argument("-c", "--cluster", help="plot location data from the datafiles",
                     action="store_true")
 parser.add_argument("-f", "--fast", help="Faster JSON processing (WARNING MUCH HIGHER MEMORY USAGE)",
@@ -25,7 +27,7 @@ parser.add_argument("-s", "--stats", help="Overlays the current day and night pe
 args = parser.parse_args()
 decimal.getcontext().prec = 9
 
-def parser(files):
+def parser(files,accuracy):
     datapoints = []
     x = 0
 
@@ -42,9 +44,11 @@ def parser(files):
 
             for entry in data:
                 try:
-                    if entry["accuracy"] > 15:
-                        lat = str(decimal.Decimal(entry["latitudeE7"]) * decimal.Decimal(0.0000001))
-                        long = str(decimal.Decimal(entry["longitudeE7"]) * decimal.Decimal(0.0000001))
+                    if entry["accuracy"] > accuracy:
+                        lat = str(float(entry["latitudeE7"]) / 1e7)
+                        long = str(float(entry["longitudeE7"]) / 1e7)
+                        #lat = str(decimal.Decimal(entry["latitudeE7"]) * decimal.Decimal(0.0000001))
+                        #long = str(decimal.Decimal(entry["longitudeE7"]) * decimal.Decimal(0.0000001))
                         location = (lat, long, 1)
                         if len(datapoints) > 2:  #make sure the list is long enough to bisect
                             lookuplocation = (bisect.bisect_left(datapoints, location)) #bisect based on current location from google
@@ -95,14 +99,7 @@ if __name__ == "__main__":
     for filename in args.filename:
         input_files.append(filename.name)
 
-    parsedlocations, frequentLocation = parser(input_files)
-
-    geolocator = Nominatim()
-    location = geolocator.reverse("%s,%s" % (frequentLocation[0],frequentLocation[1]))
-    print frequentLocation
-    print ((location.latitude, location.longitude))
-    print(location.address)
-
+    parsedlocations, frequentLocation = parser(input_files, args.accuracy)
 
     if args.heatmap:
         map_osm = folium.Map(location=[frequentLocation[0], frequentLocation[1]])
@@ -119,4 +116,13 @@ if __name__ == "__main__":
             map_osm.add_children(plugins.Terminator())
         map_osm.save('./cluster_map.html')
         map_osm._repr_html_()
+
+    if args.stats:
+        geolocator = Nominatim()
+        location = geolocator.reverse("%s,%s" % (frequentLocation[0],frequentLocation[1]))
+        print frequentLocation
+        print ((location.latitude, location.longitude))
+        print(location.address)
+
+
 
